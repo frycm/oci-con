@@ -1,13 +1,13 @@
 package main
 
 import (
-	"os/exec"
-	"os"
 	"fmt"
-	"syscall"
-	"path/filepath"
 	"io/ioutil"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
+	"syscall"
 )
 
 const rootFsLocation = "/home/martin/oci-con/alpine-minirootfs"
@@ -16,7 +16,8 @@ func main() {
 	checkArgs()
 	switch os.Args[1] {
 	case "run":
-		//run()
+		run()
+	case "container":
 		runContainer()
 	case "child":
 		child()
@@ -47,7 +48,7 @@ func bindStd(cmd *exec.Cmd) {
 // NEWPID - ProcessID to limit seen processes
 // NEWNS - Mounts to limit seen mounts
 func setUpNameSpaces(cmd *exec.Cmd, cloneFlags uintptr) {
-	cmd.SysProcAttr = &syscall.SysProcAttr {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: cloneFlags,
 	}
 }
@@ -56,7 +57,7 @@ func setUpNameSpaces(cmd *exec.Cmd, cloneFlags uintptr) {
 func runContainer() {
 	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
 	bindStd(cmd)
-	setUpNameSpaces(cmd, syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS)
+	setUpNameSpaces(cmd, syscall.CLONE_NEWUTS|syscall.CLONE_NEWPID|syscall.CLONE_NEWNS)
 
 	orPanic(cmd.Run())
 }
@@ -69,7 +70,7 @@ func child() {
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	bindStd(cmd)
 
-	orPanic(setUpHostName())
+	setUpHostName()
 	chroot()
 	mountProc()
 	defer unmountProc()
@@ -79,8 +80,8 @@ func child() {
 	orPanic(cmd.Run())
 }
 
-func setUpHostName() error {
-	return syscall.Sethostname([]byte("container"))
+func setUpHostName() {
+	orPanic(syscall.Sethostname([]byte("container")))
 }
 
 func chroot() {
@@ -89,7 +90,7 @@ func chroot() {
 }
 
 func mountProc() {
-	orPanic(syscall.Mount("proc", "proc", "proc", 0 , ""))
+	orPanic(syscall.Mount("proc", "proc", "proc", 0, ""))
 }
 
 func unmountProc() {
@@ -97,7 +98,7 @@ func unmountProc() {
 }
 
 func mountTmp() {
-	orPanic(syscall.Mount("container_tmp", "tmp", "tmpfs", 0 , ""))
+	orPanic(syscall.Mount("container_tmp", "tmp", "tmpfs", 0, ""))
 }
 
 func unmountTmp() {
@@ -119,14 +120,14 @@ func cg() {
 }
 
 // Create process attributes with all needed name spaces as non root user.
-func getNameSpacesUser() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr {
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWUSER,
+func getNameSpacesUser(cmd *exec.Cmd, cloneFlags uintptr) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: cloneFlags | syscall.CLONE_NEWUSER,
 		Credential: &syscall.Credential{Uid: 0, Gid: 0},
-		UidMappings: []syscall.SysProcIDMap {
+		UidMappings: []syscall.SysProcIDMap{
 			{ContainerID: 0, HostID: os.Getuid(), Size: 1},
 		},
-		GidMappings: []syscall.SysProcIDMap {
+		GidMappings: []syscall.SysProcIDMap{
 			{ContainerID: 0, HostID: os.Getgid(), Size: 1},
 		},
 	}
