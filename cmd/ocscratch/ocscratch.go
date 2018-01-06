@@ -10,10 +10,12 @@ import (
 	"syscall"
 )
 
-const rootFsLocation = "/home/martin/oci-con/alpine-minirootfs"
+const usage = "Usage: ocscratch run <command> (<command args>)"
 
 func main() {
-	checkArgs()
+	if len(os.Args) < 2 {
+		panic(usage)
+	}
 	switch os.Args[1] {
 	case "run":
 		run()
@@ -22,7 +24,7 @@ func main() {
 	case "child":
 		child()
 	default:
-		panic("Usage: ocscratch run <command>")
+		panic(usage)
 	}
 }
 
@@ -84,6 +86,8 @@ func setUpHostName() {
 	orPanic(syscall.Sethostname([]byte("container")))
 }
 
+const rootFsLocation = "/home/martin/oci-con/alpine-minirootfs"
+
 func chroot() {
 	orPanic(syscall.Chroot(rootFsLocation))
 	orPanic(os.Chdir("/"))
@@ -106,13 +110,12 @@ func unmountTmp() {
 }
 
 // Set up cgroups memory limit for container
-func cg() {
+func setUpCgroups() {
 	cgroups := "/sys/fs/cgroup/"
 
 	mem := filepath.Join(cgroups, "memory")
 	os.Mkdir(filepath.Join(mem, "me"), 0755)
 	orPanic(ioutil.WriteFile(filepath.Join(mem, "me/memory.limit_in_bytes"), []byte("999424"), 0700))
-	//orPanic(ioutil.WriteFile(filepath.Join(mem, "me/memory.memsw.limit_in_bytes"), []byte("999424"), 0700))
 	orPanic(ioutil.WriteFile(filepath.Join(mem, "me/notify_on_release"), []byte("1"), 0700))
 
 	pid := strconv.Itoa(os.Getpid())
@@ -120,7 +123,7 @@ func cg() {
 }
 
 // Create process attributes with all needed name spaces as non root user.
-func getNameSpacesUser(cmd *exec.Cmd, cloneFlags uintptr) {
+func setUpNameSpacesUser(cmd *exec.Cmd, cloneFlags uintptr) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: cloneFlags | syscall.CLONE_NEWUSER,
 		Credential: &syscall.Credential{Uid: 0, Gid: 0},
@@ -131,10 +134,6 @@ func getNameSpacesUser(cmd *exec.Cmd, cloneFlags uintptr) {
 			{ContainerID: 0, HostID: os.Getgid(), Size: 1},
 		},
 	}
-}
-
-func checkArgs() {
-	// TODO implement
 }
 
 // Panic in case of error
